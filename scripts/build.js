@@ -4,9 +4,17 @@ const path = require('path');
 
 const distDir = path.join(__dirname, '..', 'dist');
 
+// Bundle Service Worker with esbuild
+console.log('Bundling service worker...');
+execSync('npx esbuild src/background/service-worker.ts --bundle --outfile=dist/background/service-worker.js --format=esm --external:chrome', { stdio: 'inherit' });
+
 // Bundle content script with esbuild
 console.log('Bundling content script...');
-execSync('npx esbuild src/content/index.ts --bundle --outfile=dist/content/index.js --format=iife', { stdio: 'inherit' });
+execSync('npx esbuild src/content/index.ts --bundle --outfile=dist/content/index.js --format=iife --external:chrome', { stdio: 'inherit' });
+
+// Bundle popup script with esbuild
+console.log('Bundling popup script...');
+execSync('npx esbuild src/popup/popup.ts --bundle --outfile=dist/popup/popup.js --format=iife --external:chrome', { stdio: 'inherit' });
 
 // Copy static files
 const staticFiles = [

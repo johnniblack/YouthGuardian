@@ -1,6 +1,26 @@
 // YouthGuardian Popup 脚本
 // 标签页切换、视频扫描、频道管理、密码交互
 
+// ==================== 上下文管理 ====================
+
+let isPopupActive = true;
+
+// 监听 popup 卸载
+window.addEventListener('beforeunload', () => {
+  isPopupActive = false;
+});
+
+// 安全的异步操作包装器
+async function safeAsync<T>(fn: () => Promise<T>): Promise<T | undefined> {
+  try {
+    if (!isPopupActive) return undefined;
+    return await fn();
+  } catch (error) {
+    if (!isPopupActive) return undefined;
+    throw error;
+  }
+}
+
 // ==================== 类型定义 ====================
 
 interface AllowedChannel {
@@ -253,11 +273,44 @@ const elements = {
 
 // ==================== 初始化 ====================
 
+async function ensureContentScriptLoaded(tabId: number, tabUrl: string): Promise<boolean> {
+  const isSupported = tabUrl.includes('youtube.com') || tabUrl.includes('bilibili.com') || tabUrl.includes('search.bilibili.com');
+  if (!isSupported) {
+    return false;
+  }
+
+  try {
+    await chrome.tabs.sendMessage(tabId, { type: 'PING' });
+    console.log('Content script is already loaded');
+    return true;
+  } catch (err) {
+    console.log('Content script not loaded, attempting to inject...');
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content/index.js']
+      });
+      console.log('Content script injected successfully');
+      return true;
+    } catch (injectErr) {
+      console.error('Failed to inject content script:', injectErr);
+      return false;
+    }
+  }
+}
+
 async function init(): Promise<void> {
   console.log('YouthGuardian popup init');
   await loadStatus();
   await loadChannels();
   setupEventListeners();
+
+  // 确保 content script 已加载
+  const tab = await getCurrentTab();
+  if (tab?.id && tab?.url) {
+    await ensureContentScriptLoaded(tab.id, tab.url);
+  }
+
   renderVideoList();
 }
 
@@ -406,11 +459,64 @@ async function renderChannelList(): Promise<void> {
 async function renderVideoList(): Promise<void> {
   console.log('renderVideoList called');
   try {
+    if (!isPopupActive) return;
     const tab = await getCurrentTab();
     console.log('tab for scan:', tab);
     if (!tab?.id) { console.log('no tab id'); showVideoEmpty(); return; }
+    if (!isPopupActive) return;
     console.log('sending SCAN_VIDEOS to tab', tab.id);
-    const response = await chrome.tabs.sendMessage(tab.id, { type: 'SCAN_VIDEOS' }) as { videos: VideoItem[] };
+
+    // 检查标签页 URL 是否支持
+    const tabUrl = tab.url || '';
+    const isSupported = tabUrl.includes('youtube.com') || tabUrl.includes('bilibili.com') || tabUrl.includes('search.bilibili.com');
+    if (!isSupported) {
+      console.log('unsupported page url:', tabUrl);
+      showVideoEmpty();
+      return;
+    }
+
+    let response: { videos: VideoItem[] } | undefined;
+
+    // 首先尝试发送消息
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        if (!isPopupActive) return;
+        response = await chrome.tabs.sendMessage(tab.id, { type: 'SCAN_VIDEOS' }) as { videos: VideoItem[] };
+        console.log('SCAN_VIDEOS message sent successfully');
+        break;
+      } catch (err) {
+        if (isPopupActive) {
+          console.error(`SCAN_VIDEOS attempt ${attempt + 1} failed:`, err);
+
+          // 第一次失败时尝试注入
+          if (attempt === 0) {
+            try {
+              console.log('Attempting to inject content script...');
+              await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                files: ['content/index.js']
+              });
+              console.log('Content script injected');
+              // 等待脚本初始化
+              await new Promise(resolve => setTimeout(resolve, 200));
+            } catch (injectErr) {
+              console.error('Failed to inject content script:', injectErr);
+              showVideoEmpty();
+              return;
+            }
+          } else if (attempt > 0) {
+            // 第二次失败后给出明确反馈
+            console.error('Failed to establish connection after retries');
+            showVideoEmpty();
+            return;
+          }
+        } else {
+          return;
+        }
+      }
+    }
+
+    if (!isPopupActive) return;
     console.log('scan response:', response);
     currentVideos = response?.videos || [];
 
@@ -426,8 +532,10 @@ async function renderVideoList(): Promise<void> {
     });
 
     if (uniqueVideos.length === 0) { console.log('no videos'); showVideoEmpty(); return; }
+    if (!isPopupActive) return;
     elements.videoEmpty.style.display = 'none';
     const html = await Promise.all(uniqueVideos.map(async video => {
+      if (!isPopupActive) return '';
       const channelCheck = { platform: video.platform, authorId: video.authorId, authorUrl: video.authorUrl, authorName: video.authorName, videoUrl: video.videoUrl };
       console.log(`[renderVideoList] ${video.authorName}:`, {
         authorId: video.authorId || '(空)',
@@ -435,6 +543,7 @@ async function renderVideoList(): Promise<void> {
         videoUrl: video.videoUrl || '(空)'
       });
       const allowed = await isChannelAllowed(channelCheck);
+      if (!isPopupActive) return '';
       console.log(`[renderVideoList] 频道 ${video.authorName} 的检查结果: ${allowed ? '已允许' : '未允许'}`);
       // 判断是合辑还是普通频道
       const isPlaylist = video.authorName === '合辑';
@@ -461,6 +570,7 @@ async function renderVideoList(): Promise<void> {
         </div>
       `;
     }));
+    if (!isPopupActive) return;
     elements.videoList.innerHTML = html.join('');
     elements.videoList.querySelectorAll('.btn-allow:not([disabled])').forEach(btn => {
       btn.addEventListener('click', async (e) => {

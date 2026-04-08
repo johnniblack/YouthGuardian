@@ -45,49 +45,71 @@ async function filterCurrentPage(): Promise<void> {
 
 // 监听限制状态变化和扫描请求
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message.type === 'RESTRICTION_CHANGED') {
-    if (message.payload.restrictionEnabled) {
-      filterCurrentPage();
-    } else {
-      // 解除限制，显示所有内容
-      document.querySelectorAll('[data-youth-guardian-processed="true"]').forEach(el => {
-        (el as HTMLElement).style.display = '';
-        el.removeAttribute('data-youth-guardian-processed');
-      });
-      // 显示直播卡片
-      document.querySelectorAll('[data-youth-guardian-live="true"]').forEach(el => {
-        (el as HTMLElement).style.display = '';
-        el.removeAttribute('data-youth-guardian-live');
-      });
-      // 显示非视频内容（番剧、话题等）
-      document.querySelectorAll('[data-youth-guardian-non-video="true"]').forEach(el => {
-        (el as HTMLElement).style.display = '';
-        el.removeAttribute('data-youth-guardian-non-video');
-      });
+  try {
+    if (message.type === 'PING') {
+      sendResponse({ pong: true });
+      return true;
     }
-  }
 
-  if (message.type === 'SCAN_VIDEOS') {
-    // 扫描当前页面的视频
-    const scanFn = getScanFunction();
-    const videos = scanFn(document.body);
-    sendResponse({ videos });
-    return true;
+    if (message.type === 'RESTRICTION_CHANGED') {
+      if (message.payload.restrictionEnabled) {
+        filterCurrentPage().catch(err => console.error('Filter error:', err));
+      } else {
+        // 解除限制，显示所有内容
+        document.querySelectorAll('[data-youth-guardian-processed="true"]').forEach(el => {
+          (el as HTMLElement).style.display = '';
+          el.removeAttribute('data-youth-guardian-processed');
+        });
+        // 显示直播卡片
+        document.querySelectorAll('[data-youth-guardian-live="true"]').forEach(el => {
+          (el as HTMLElement).style.display = '';
+          el.removeAttribute('data-youth-guardian-live');
+        });
+        // 显示非视频内容（番剧、话题等）
+        document.querySelectorAll('[data-youth-guardian-non-video="true"]').forEach(el => {
+          (el as HTMLElement).style.display = '';
+          el.removeAttribute('data-youth-guardian-non-video');
+        });
+      }
+      sendResponse({ success: true });
+      return true;
+    }
+
+    if (message.type === 'SCAN_VIDEOS') {
+      // 扫描当前页面的视频
+      const scanFn = getScanFunction();
+      const videos = scanFn(document.body);
+      sendResponse({ videos });
+      return true;
+    }
+
+    sendResponse({ error: 'Unknown message type' });
+  } catch (error) {
+    console.error('Message handler error:', error);
+    try {
+      sendResponse({ error: String(error) });
+    } catch (e) {
+      // Ignore errors sending error response
+    }
   }
 });
 
 // 页面加载完成后执行初始过滤
-document.addEventListener('DOMContentLoaded', async () => {
-  await filterCurrentPage();
-  observePageChanges();
-});
-
-// 如果 DOM 已经加载完成，立即执行
-if (document.readyState === 'complete' || document.readyState === 'interactive') {
-  setTimeout(async () => {
+async function initializeFiltering() {
+  try {
     await filterCurrentPage();
     observePageChanges();
-  }, 100);
+  } catch (error) {
+    console.error('Failed to initialize filtering:', error);
+  }
+}
+
+// 使用 readyState 检查来确定何时初始化
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeFiltering);
+} else {
+  // DOM 已经加载
+  initializeFiltering();
 }
 
 // 导出给 popup 调用
