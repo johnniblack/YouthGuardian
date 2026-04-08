@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouthGuardian 青少年守护</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 标签页导航 -->
+    <nav class="tabs">
+      <button class="tab active" data-tab="videos">视频</button>
+      <button class="tab" data-tab="manage">管理</button>
+    </nav>
+
+    <!-- 标签页内容 -->
+    <main class="tab-content">
+      <!-- 视频列表 -->
+      <section id="tab-videos" class="tab-panel active">
+        <div class="section-header">
+          <h3>当前页面可见视频</h3>
+          <button class="btn btn-small btn-rescan" id="btn-rescan">重新扫描</button>
+        </div>
+        <div class="video-list" id="video-list">
+          <div class="empty-state" id="video-empty">
+            <p>点击"重新扫描"获取当前页面视频列表</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- 管理 -->
+      <section id="tab-manage" class="tab-panel">
+        <div class="status-card">
+          <div class="status-header">
+            <div class="platform-badge" id="platform">检测中...</div>
+            <div class="restriction-status" id="restriction-status">
+              <span class="status-dot"></span>
+              <span class="status-text">已关闭</span>
+            </div>
+          </div>
+          <div class="status-info">
+            <p class="channel-count">已允许频道：<span id="channel-count">0</span> 个</p>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn btn-primary" id="btn-toggle">开启限制</button>
+        </div>
+
+        <!-- YouTube 频道列表 -->
+        <div class="section-header" style="margin-top: 16px;">
+          <h3>YouTube 允许列表 <span id="youtube-count">(0)</span></h3>
+          <div class="header-actions">
+            <button class="btn btn-small btn-danger btn-clear" id="btn-clear-youtube">清空</button>
+          </div>
+        </div>
+        <div class="channel-list" id="youtube-list">
+          <div class="empty-state" id="youtube-empty">
+            <p>暂无 YouTube 允许频道</p>
+          </div>
+        </div>
+
+        <!-- Bilibili 频道列表 -->
+        <div class="section-header" style="margin-top: 16px;">
+          <h3>Bilibili 允许列表 <span id="bilibili-count">(0)</span></h3>
+          <div class="header-actions">
+            <button class="btn btn-small btn-danger btn-clear" id="btn-clear-bilibili">清空</button>
+          </div>
+        </div>
+        <div class="channel-list" id="bilibili-list">
+          <div class="empty-state" id="bilibili-empty">
+            <p>暂无 Bilibili 允许频道</p>
+          </div>
+        </div>
+
+        <!-- 全部清空 -->
+        <div style="margin-top: 16px; text-align: center;">
+          <button class="btn btn-small btn-danger btn-clear" id="btn-clear-all">清空全部</button>
+        </div>
+
+        <div class="password-section">
+          <h3>密码设置</h3>
+          <div id="password-not-set">
+            <p class="hint">设置密码以保护白名单</p>
+            <button class="btn btn-secondary" id="btn-set-password">设置密码</button>
+          </div>
+          <div id="password-set" style="display: none;">
+            <p class="hint">密码已设置</p>
+            <button class="btn btn-secondary" id="btn-change-password">修改密码</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 密码输入弹窗 -->
+    <div class="modal" id="password-modal">
+      <div class="modal-content">
+        <h3 id="modal-title">输入密码</h3>
+        <div id="modal-message"></div>
+        <input type="password" class="input" id="password-input" placeholder="请输入密码">
+        <div id="confirm-password-group" style="display: none;">
+          <input type="password" class="input" id="confirm-password-input" placeholder="请再次输入密码">
+        </div>
+        <div class="modal-actions">
+          <button class="btn btn-secondary" id="modal-cancel">取消</button>
+          <button class="btn btn-primary" id="modal-confirm">确认</button>
+        </div>
+        <p class="error-message" id="modal-error"></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

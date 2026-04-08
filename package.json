@@ -1,0 +1,24 @@
+{
+  "name": "youth-guardian",
+  "version": "1.0.0",
+  "description": "青少年视频网站白名单限制插件",
+  "main": "src/background/service-worker.ts",
+  "scripts": {
+    "build": "tsc && node scripts/build.js",
+    "watch": "tsc --watch",
+    "lint": "eslint src --ext .ts"
+  },
+  "keywords": [
+    "chrome-extension",
+    "youtube",
+    "bilibili",
+    "parental-control"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/chrome": "^0.0.268",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.4.0"
+  }
+}
