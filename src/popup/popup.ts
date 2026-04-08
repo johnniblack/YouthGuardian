@@ -144,7 +144,32 @@ async function isChannelAllowed(channel: Partial<AllowedChannel>): Promise<boole
   const id = generateChannelId(channel);
   console.log('[isChannelAllowed] 生成的 ID:', id);
   console.log('[isChannelAllowed] 白名单中的所有 ID:', channels.map(c => c.id));
-  const result = channels.some(c => c.id === id);
+
+  // 首先尝试精确匹配生成的 ID
+  let result = channels.some(c => c.id === id);
+
+  // 如果未找到，尝试多字段匹配（向后兼容之前不同优先级生成的 ID）
+  if (!result) {
+    result = channels.some(c => {
+      // 同平台且至少一个字段匹配
+      if (c.platform !== channel.platform) return false;
+
+      // 精确匹配 videoUrl（合辑场景）
+      if (channel.videoUrl && c.videoUrl && channel.videoUrl === c.videoUrl) return true;
+
+      // 精确匹配 authorId
+      if (channel.authorId && c.authorId && channel.authorId === c.authorId) return true;
+
+      // 精确匹配 authorUrl
+      if (channel.authorUrl && c.authorUrl && channel.authorUrl === c.authorUrl) return true;
+
+      // 匹配 authorName
+      if (channel.authorName && c.authorName && channel.authorName === c.authorName) return true;
+
+      return false;
+    });
+  }
+
   console.log('[isChannelAllowed] 匹配结果:', result);
   return result;
 }
@@ -388,9 +413,21 @@ async function renderVideoList(): Promise<void> {
     const response = await chrome.tabs.sendMessage(tab.id, { type: 'SCAN_VIDEOS' }) as { videos: VideoItem[] };
     console.log('scan response:', response);
     currentVideos = response?.videos || [];
-    if (currentVideos.length === 0) { console.log('no videos'); showVideoEmpty(); return; }
+
+    // 按频道名称去重：保留每个频道的第一个视频
+    const seenChannels = new Set<string>();
+    const uniqueVideos = currentVideos.filter(video => {
+      const channelKey = video.authorName || '(未知频道)';
+      if (seenChannels.has(channelKey)) {
+        return false;
+      }
+      seenChannels.add(channelKey);
+      return true;
+    });
+
+    if (uniqueVideos.length === 0) { console.log('no videos'); showVideoEmpty(); return; }
     elements.videoEmpty.style.display = 'none';
-    const html = await Promise.all(currentVideos.map(async video => {
+    const html = await Promise.all(uniqueVideos.map(async video => {
       const channelCheck = { platform: video.platform, authorId: video.authorId, authorUrl: video.authorUrl, authorName: video.authorName, videoUrl: video.videoUrl };
       console.log(`[renderVideoList] ${video.authorName}:`, {
         authorId: video.authorId || '(空)',
