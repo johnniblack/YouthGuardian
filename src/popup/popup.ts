@@ -227,17 +227,23 @@ async function loadStatus(): Promise<void> {
     console.log('tab:', tab);
     const url = tab?.url || '';
     console.log('url:', url);
-    let platform = '不支持';
-    if (url.includes('youtube.com')) platform = 'YouTube';
-    else if (url.includes('bilibili.com')) platform = 'Bilibili';
-    elements.platform.textContent = platform;
-    console.log('platform set to:', platform);
+    let platform: 'youtube' | 'bilibili' | 'unsupported' = 'unsupported';
+    if (url.includes('youtube.com')) platform = 'youtube';
+    else if (url.includes('bilibili.com')) platform = 'bilibili';
+    const platformName = platform === 'youtube' ? 'YouTube' : platform === 'bilibili' ? 'Bilibili' : '不支持';
+    elements.platform.textContent = platformName;
+    console.log('platform set to:', platformName);
 
     const settings = await getSettings();
     restrictionEnabled = settings.restrictionEnabled;
     passwordEnabled = settings.passwordEnabled;
     updateRestrictionUI();
     updatePasswordUI();
+
+    // 更新当前平台频道数量
+    const channels = await getAllowedChannels();
+    const platformChannels = channels.filter(c => c.platform === platform);
+    elements.channelCount.textContent = platformChannels.length.toString();
   } catch (error) {
     console.error('加载状态失败:', error);
   }
@@ -246,8 +252,7 @@ async function loadStatus(): Promise<void> {
 async function loadChannels(): Promise<void> {
   try {
     currentChannels = await getAllowedChannels();
-    elements.channelCount.textContent = currentChannels.length.toString();
-    renderChannelList();
+    await renderChannelList();
   } catch (error) {
     console.error('加载频道失败:', error);
   }
@@ -276,13 +281,19 @@ function updatePasswordUI(): void {
 
 // ==================== 渲染 ====================
 
-function renderChannelList(): void {
+async function renderChannelList(): Promise<void> {
   // 按平台分组
   const youtubeChannels = currentChannels.filter(c => c.platform === 'youtube');
   const bilibiliChannels = currentChannels.filter(c => c.platform === 'bilibili');
 
-  // 更新总计数
-  elements.channelCount.textContent = currentChannels.length.toString();
+  // 获取当前平台，更新为仅显示当前平台的频道数量
+  const tab = await getCurrentTab();
+  const url = tab?.url || '';
+  let platform: 'youtube' | 'bilibili' | 'unsupported' = 'unsupported';
+  if (url.includes('youtube.com')) platform = 'youtube';
+  else if (url.includes('bilibili.com')) platform = 'bilibili';
+  const platformChannels = currentChannels.filter(c => c.platform === platform);
+  elements.channelCount.textContent = platformChannels.length.toString();
 
   // 渲染 YouTube 列表
   if (youtubeChannels.length === 0) {
@@ -501,7 +512,8 @@ async function addChannelToWhitelist(channel: { authorName: string; authorId?: s
     await addChannel(channel);
     button.textContent = '已允许';
     button.disabled = true;
-    await loadChannels();
+    currentChannels = await getAllowedChannels();
+    await renderChannelList();
   } catch (error) {
     console.error('添加频道失败:', error);
   }
@@ -537,14 +549,15 @@ function showModalError(message: string): void {
 
 function setupEventListeners(): void {
   elements.tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
+    tab.addEventListener('click', async () => {
       const tabId = tab.dataset.tab;
       elements.tabs.forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       elements.panels.forEach(panel => {
         panel.classList.toggle('active', panel.id === `tab-${tabId}`);
       });
-      if (tabId === 'videos') renderVideoList();
+      if (tabId === 'videos') await renderVideoList();
+      if (tabId === 'manage') await renderChannelList();
     });
   });
 
@@ -566,12 +579,22 @@ function setupEventListeners(): void {
     });
   });
   elements.btnChangePassword.addEventListener('click', () => {
-    showPasswordModal('修改密码', '请输入新密码（至少4位）', async (password) => {
-      if (password.length < 4) { showModalError('密码长度至少4位'); return; }
-      const confirmPwd = elements.confirmPasswordInput.value;
-      if (password !== confirmPwd) { showModalError('两次输入的密码不一致'); return; }
-      await setPassword(password);
+    // 先验证原密码
+    showPasswordModal('验证密码', '请输入原密码', async (oldPassword) => {
+      const valid = await verifyPassword(oldPassword);
+      if (!valid) { showModalError('原密码错误'); return; }
       hidePasswordModal();
+      // 再输入新密码
+      setTimeout(() => {
+        showPasswordModal('设置新密码', '请输入新密码（至少4位）', async (newPassword) => {
+          if (newPassword.length < 4) { showModalError('密码长度至少4位'); return; }
+          const confirmPwd = elements.confirmPasswordInput.value;
+          if (newPassword !== confirmPwd) { showModalError('两次输入的密码不一致'); return; }
+          await setPassword(newPassword);
+          hidePasswordModal();
+        });
+        elements.confirmPasswordGroup.style.display = 'block';
+      }, 100);
     });
   });
   elements.modalCancel.addEventListener('click', hidePasswordModal);
