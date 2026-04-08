@@ -49,10 +49,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.payload.restrictionEnabled) {
       filterCurrentPage();
     } else {
-      // 解除限制，显示所有视频
+      // 解除限制，显示所有内容
       document.querySelectorAll('[data-youth-guardian-processed="true"]').forEach(el => {
         (el as HTMLElement).style.display = '';
         el.removeAttribute('data-youth-guardian-processed');
+      });
+      // 显示直播卡片
+      document.querySelectorAll('[data-youth-guardian-live="true"]').forEach(el => {
+        (el as HTMLElement).style.display = '';
+        el.removeAttribute('data-youth-guardian-live');
+      });
+      // 显示非视频内容（番剧、话题等）
+      document.querySelectorAll('[data-youth-guardian-non-video="true"]').forEach(el => {
+        (el as HTMLElement).style.display = '';
+        el.removeAttribute('data-youth-guardian-non-video');
       });
     }
   }

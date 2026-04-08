@@ -118,17 +118,35 @@ function hashString(str: string): string {
 
 function generateChannelId(channel: Partial<AllowedChannel>): string {
   const platform = channel.platform;
-  // 优先使用 videoUrl（合辑/特殊视频）
-  if (channel.videoUrl) return `${platform}_video_${hashString(channel.videoUrl)}`;
-  if (channel.authorId) return `${platform}_id_${channel.authorId}`;
-  if (channel.authorUrl) return `${platform}_url_${hashString(channel.authorUrl)}`;
-  return `${platform}_name_${hashString(channel.authorName || '')}`;
+  // 优先级：authorId（最稳定）> videoUrl（合辑/特殊视频）> authorUrl > authorName
+  if (channel.authorId) {
+    const id = `${platform}_id_${channel.authorId}`;
+    console.log('[generateChannelId] 使用 authorId:', id);
+    return id;
+  }
+  if (channel.videoUrl) {
+    const id = `${platform}_video_${hashString(channel.videoUrl)}`;
+    console.log('[generateChannelId] 使用 videoUrl:', id);
+    return id;
+  }
+  if (channel.authorUrl) {
+    const id = `${platform}_url_${hashString(channel.authorUrl)}`;
+    console.log('[generateChannelId] 使用 authorUrl:', id);
+    return id;
+  }
+  const id = `${platform}_name_${hashString(channel.authorName || '')}`;
+  console.log('[generateChannelId] 使用 authorName:', id);
+  return id;
 }
 
 async function isChannelAllowed(channel: Partial<AllowedChannel>): Promise<boolean> {
   const channels = await getAllowedChannels();
   const id = generateChannelId(channel);
-  return channels.some(c => c.id === id);
+  console.log('[isChannelAllowed] 生成的 ID:', id);
+  console.log('[isChannelAllowed] 白名单中的所有 ID:', channels.map(c => c.id));
+  const result = channels.some(c => c.id === id);
+  console.log('[isChannelAllowed] 匹配结果:', result);
+  return result;
 }
 
 async function addChannel(channel: Omit<AllowedChannel, 'id' | 'createdAt' | 'source'>): Promise<AllowedChannel> {
@@ -373,7 +391,14 @@ async function renderVideoList(): Promise<void> {
     if (currentVideos.length === 0) { console.log('no videos'); showVideoEmpty(); return; }
     elements.videoEmpty.style.display = 'none';
     const html = await Promise.all(currentVideos.map(async video => {
-      const allowed = await isChannelAllowed({ platform: video.platform, authorId: video.authorId, authorUrl: video.authorUrl, authorName: video.authorName, videoUrl: video.videoUrl });
+      const channelCheck = { platform: video.platform, authorId: video.authorId, authorUrl: video.authorUrl, authorName: video.authorName, videoUrl: video.videoUrl };
+      console.log(`[renderVideoList] ${video.authorName}:`, {
+        authorId: video.authorId || '(空)',
+        authorUrl: video.authorUrl || '(空)',
+        videoUrl: video.videoUrl || '(空)'
+      });
+      const allowed = await isChannelAllowed(channelCheck);
+      console.log(`[renderVideoList] 频道 ${video.authorName} 的检查结果: ${allowed ? '已允许' : '未允许'}`);
       // 判断是合辑还是普通频道
       const isPlaylist = video.authorName === '合辑';
       const allowButtonText = isPlaylist ? (allowed ? '已允许' : '允许此视频') : (allowed ? '已允许' : '允许此频道');
@@ -509,10 +534,21 @@ async function clearBilibiliChannels(): Promise<void> {
 
 async function addChannelToWhitelist(channel: { authorName: string; authorId?: string; authorUrl?: string; videoUrl?: string; platform: 'youtube' | 'bilibili' }, button: HTMLButtonElement): Promise<void> {
   try {
-    await addChannel(channel);
+    console.log('[addChannelToWhitelist] 准备添加频道:', {
+      name: channel.authorName,
+      authorId: channel.authorId || '(空)',
+      authorUrl: channel.authorUrl || '(空)',
+      videoUrl: channel.videoUrl || '(空)',
+      platform: channel.platform
+    });
+    const added = await addChannel(channel);
+    console.log('[addChannelToWhitelist] 添加完成，频道 ID:', added.id);
     button.textContent = '已允许';
     button.disabled = true;
+    button.classList.remove('btn-primary');
+    button.classList.add('btn-secondary');
     currentChannels = await getAllowedChannels();
+    console.log('[addChannelToWhitelist] 所有白名单频道的 ID:', currentChannels.map(c => `${c.platform}_${c.authorName}: ${c.id}`));
     await renderChannelList();
   } catch (error) {
     console.error('添加频道失败:', error);
