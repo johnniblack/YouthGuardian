@@ -24,9 +24,24 @@ const BILIBILI_SELECTORS = {
  */
 function parseBilibiliCard(card: Element): VideoItem | null {
   try {
-    // 获取视频链接 - 新版B站使用 .bili-video-card__image--link
-    const linkEl = card.querySelector('.bili-video-card__image--link') as HTMLAnchorElement;
-    const videoUrl = linkEl?.href || '';
+    console.log('[parseBilibiliCard] 开始解析卡片');
+    // 获取视频链接 - 支持多种情况
+    let videoUrl = '';
+
+    // 情况1: 新版B站使用 .bili-video-card__image--link
+    let linkEl = card.querySelector('.bili-video-card__image--link') as HTMLAnchorElement;
+    videoUrl = linkEl?.href || '';
+
+    // 情况2: 搜索结果页 - 卡片本身是 <a> 标签
+    if (!videoUrl && card instanceof HTMLAnchorElement) {
+      videoUrl = card.href;
+    }
+
+    // 情况3: 搜索结果页 - 从卡片内的 <a> 标签获取链接
+    if (!videoUrl) {
+      linkEl = card.querySelector('a[href*="/video/"]') as HTMLAnchorElement;
+      videoUrl = linkEl?.href || '';
+    }
 
     // 规范化URL（B站链接可能是//www.bilibili.com格式）
     const normalizedUrl = videoUrl.startsWith('//') ? 'https:' + videoUrl : videoUrl;
@@ -37,10 +52,27 @@ function parseBilibiliCard(card: Element): VideoItem | null {
 
     if (!videoId) return null;
 
-    // 获取标题 - 从 .bili-video-card__info--tit 内的链接获取
-    const titleEl = card.querySelector('.bili-video-card__info--tit a') as HTMLAnchorElement;
-    const title = titleEl?.textContent?.trim() ||
-                  card.querySelector('.bili-video-card__info--tit')?.textContent?.trim() || '';
+    // 获取标题 - 多种方式适配过时和新版卡片
+    let title = '';
+
+    // 方式1: 从 .bili-video-card__info--tit 内的链接获取
+    const titleLink = card.querySelector('.bili-video-card__info--tit a') as HTMLAnchorElement;
+    if (titleLink) {
+      title = titleLink.textContent?.trim() || '';
+    }
+
+    // 方式2: 直接从 .bili-video-card__info--tit 获取（搜索结果页）
+    if (!title) {
+      const titleEl = card.querySelector('.bili-video-card__info--tit');
+      title = titleEl?.textContent?.trim() || '';
+    }
+
+    // 方式3: 从卡片顶部大链接的 title 属性或第一个链接的 title 属性
+    if (!title) {
+      const linkWithTitle = (card.querySelector('a[title*="宝宝"]') ||
+                            card.querySelector('a[title]')) as HTMLAnchorElement | null;
+      title = linkWithTitle?.title?.trim() || '';
+    }
 
     if (!title) return null;
 
@@ -108,7 +140,7 @@ function parseBilibiliCard(card: Element): VideoItem | null {
       thumbnailUrl = imgEl?.src || '';
     }
 
-    return {
+    const result: VideoItem = {
       id: videoId,
       platform: 'bilibili',
       title,
@@ -118,7 +150,10 @@ function parseBilibiliCard(card: Element): VideoItem | null {
       videoUrl: normalizedUrl,
       thumbnailUrl
     };
-  } catch {
+    console.log('[parseBilibiliCard] 解析成功:', result.id, result.title);
+    return result;
+  } catch (e) {
+    console.log('[parseBilibiliCard] 解析异常:', e);
     return null;
   }
 }
@@ -140,26 +175,37 @@ export function scanBilibiliVideos(container: HTMLElement): VideoItem[] {
     '.channel-video-list .video-item'
   ];
 
+  console.log('[scanBilibiliVideos] 开始扫描，选择器数量:', selectors.length);
+
   for (const selector of selectors) {
     try {
       const cards = Array.from(container.querySelectorAll(selector));
+      console.log(`[scanBilibiliVideos] 选择器 "${selector}" 找到 ${cards.length} 张卡片`);
+
       for (const card of cards) {
-        // 跳过骨架屏元素
-        if (card.querySelector('.bili-video-card__skeleton')) {
+        // 检查是否为真正的内容卡片（不是骨架屏）
+        // .bili-video-card__wrap 是真实内容的容器，骨架屏时不会有这个元素显示
+        const contentWrapper = card.querySelector('.bili-video-card__wrap');
+        if (!contentWrapper) {
+          console.log('[scanBilibiliVideos] 跳过骨架屏（无内容容器）');
           continue;
         }
 
         const video = parseBilibiliCard(card);
         if (video && video.id && !seen.has(video.id)) {
+          console.log('[scanBilibiliVideos] 添加视频:', video.id, video.title);
           seen.add(video.id);
           videos.push(video);
+        } else if (!video) {
+          console.log('[scanBilibiliVideos] 解析失败，返回 null');
         }
       }
-    } catch {
-      // 选择器可能无效，跳过
+    } catch (e) {
+      console.log(`[scanBilibiliVideos] 选择器 "${selector}" 出错:`, e);
     }
   }
 
+  console.log('[scanBilibiliVideos] 扫描完成，找到', videos.length, '个视频');
   return videos;
 }
 
@@ -167,7 +213,10 @@ export function scanBilibiliVideos(container: HTMLElement): VideoItem[] {
  * 扫描 Bilibili 搜索结果页
  */
 export function scanSearchResults(): VideoItem[] {
-  const container = document.querySelector('.video-list, #search-result, .search-result') || document.body;
+  // 新版搜索页的结果容器选择器
+  const container = document.querySelector(
+    '.video-list, #search-result, .search-result, main, [role="main"]'
+  ) || document.body;
   return scanBilibiliVideos(container as HTMLElement);
 }
 

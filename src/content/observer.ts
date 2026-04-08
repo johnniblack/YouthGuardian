@@ -103,18 +103,23 @@ function findVideoElements(video: VideoItem): HTMLElement[] {
     // 方法1：通过视频链接找到卡片容器（推荐）
     const watchLink = document.querySelector(`a[href*="/video/${video.id}"]`) as HTMLAnchorElement;
     if (watchLink) {
-      // 向上查找视频卡片容器
-      const parent = watchLink.closest('.bili-video-card');
+      // 优先查找 .bili-video-card 容器（传统视频卡片）
+      let parent = watchLink.closest('.bili-video-card');
       if (parent instanceof HTMLElement) {
         results.push(parent);
+      } else {
+        // 备选：如果卡片本身是 <a> 标签（搜索结果页），则直接使用
+        if (watchLink instanceof HTMLElement && watchLink.href.includes(`/video/${video.id}`)) {
+          results.push(watchLink);
+        }
       }
     }
 
     // 方法2：通过 authorId 查找该UP主的所有视频卡片
     if (results.length === 0 && video.authorId) {
+      // 搜索传统卡片
       const cards = Array.from(document.querySelectorAll('.bili-video-card')) as HTMLElement[];
       for (const card of cards) {
-        // 检查卡片中是否有该UP的链接
         const authorLink = card.querySelector(
           `a[href*="/space/${video.authorId}"], [data-mid="${video.authorId}"]`
         );
@@ -122,15 +127,44 @@ function findVideoElements(video: VideoItem): HTMLElement[] {
           results.push(card);
         }
       }
+
+      // 搜索搜索结果页卡片
+      if (results.length === 0) {
+        const searchCards = Array.from(
+          document.querySelectorAll(`a[href*="/video/"][target="_blank"]`)
+        ) as HTMLAnchorElement[];
+        for (const card of searchCards) {
+          const authorLink = card.querySelector(
+            `a[href*="/space/${video.authorId}"], [data-mid="${video.authorId}"]`
+          );
+          if (authorLink) {
+            results.push(card);
+          }
+        }
+      }
     }
 
     // 方法3：通过频道名查找（备用）
     if (results.length === 0 && video.authorName) {
+      // 搜索传统卡片
       const cards = Array.from(document.querySelectorAll('.bili-video-card')) as HTMLElement[];
       for (const card of cards) {
         const authorEl = card.querySelector('.bili-video-card__info--author');
         if (authorEl?.textContent?.includes(video.authorName)) {
           results.push(card);
+        }
+      }
+
+      // 搜索搜索结果页卡片
+      if (results.length === 0) {
+        const searchCards = Array.from(
+          document.querySelectorAll(`a[href*="/video/"][target="_blank"]`)
+        ) as HTMLAnchorElement[];
+        for (const card of searchCards) {
+          const authorEl = card.querySelector('.bili-video-card__info--author');
+          if (authorEl?.textContent?.includes(video.authorName)) {
+            results.push(card);
+          }
         }
       }
     }
