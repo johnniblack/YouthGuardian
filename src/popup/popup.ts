@@ -231,6 +231,10 @@ let currentChannels: AllowedChannel[] = [];
 let restrictionEnabled = false;
 let passwordEnabled = false;
 
+// 搜索状态
+let searchResults: string[] = [];
+let selectedIndex = -1;
+
 // ==================== DOM 元素 ====================
 
 const elements = {
@@ -243,6 +247,9 @@ const elements = {
   videoList: document.getElementById('video-list') as HTMLDivElement,
   videoEmpty: document.getElementById('video-empty') as HTMLDivElement,
   btnRescan: document.getElementById('btn-rescan') as HTMLButtonElement,
+  // 搜索相关
+  channelSearch: document.getElementById('channel-search') as HTMLInputElement,
+  searchDropdown: document.getElementById('search-dropdown') as HTMLDivElement,
   // YouTube 频道列表
   youtubeList: document.getElementById('youtube-list') as HTMLDivElement,
   youtubeEmpty: document.getElementById('youtube-empty') as HTMLDivElement,
@@ -702,6 +709,107 @@ async function addChannelToWhitelist(channel: { authorName: string; authorId?: s
   }
 }
 
+// ==================== 搜索逻辑 ====================
+
+function updateSearchDropdown(keyword: string) {
+  if (!keyword.trim()) {
+    elements.searchDropdown.style.display = 'none';
+    searchResults = [];
+    selectedIndex = -1;
+    return;
+  }
+
+  // 从 currentVideos 提取去重的频道名进行模糊匹配
+  const channels = Array.from(new Set(currentVideos.map(v => v.authorName || '(未知频道)'))).filter(Boolean);
+  searchResults = channels.filter(name =>
+    name.toLowerCase().includes(keyword.toLowerCase())
+  );
+
+  if (searchResults.length === 0) {
+    elements.searchDropdown.style.display = 'none';
+    selectedIndex = -1;
+    return;
+  }
+
+  elements.searchDropdown.innerHTML = searchResults.map((name, index) => `
+    <div class="search-item ${index === 0 ? 'active' : ''}" data-index="${index}" data-name="${escapeAttr(name)}">${escapeHtml(name)}</div>
+  `).join('');
+
+  elements.searchDropdown.style.display = 'block';
+  selectedIndex = 0;
+}
+
+function handleSearchKeydown(e: KeyboardEvent) {
+  if (elements.searchDropdown.style.display === 'none') return;
+
+  const items = elements.searchDropdown.querySelectorAll('.search-item');
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    selectedIndex = (selectedIndex + 1) % searchResults.length;
+    updateActiveItem(items);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    selectedIndex = (selectedIndex - 1 + searchResults.length) % searchResults.length;
+    updateActiveItem(items);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (selectedIndex >= 0) {
+      selectChannel(searchResults[selectedIndex]);
+    }
+  } else if (e.key === 'Escape') {
+    elements.searchDropdown.style.display = 'none';
+  }
+}
+
+function updateActiveItem(items: NodeListOf<Element>) {
+  items.forEach((item, i) => {
+    item.classList.toggle('active', i === selectedIndex);
+    if (i === selectedIndex) {
+      (item as HTMLElement).scrollIntoView({ block: 'nearest' });
+    }
+  });
+}
+
+function selectChannel(channelName: string) {
+  console.log('[selectChannel] 选中频道:', channelName);
+
+  // 查找对应频道的第一个视频 DOM
+  const videoElements = elements.videoList.querySelectorAll('.video-item');
+  let targetElement: HTMLElement | null = null;
+
+  for (const el of Array.from(videoElements)) {
+    const meta = el.querySelector('.video-meta');
+    if (meta?.textContent?.trim() === channelName) {
+      targetElement = el as HTMLElement;
+      break;
+    }
+  }
+
+  if (targetElement) {
+    console.log('[selectChannel] 找到目标元素，开始滚动并高亮');
+    targetElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+    // 移除可能存在的旧高亮
+    elements.videoList.querySelectorAll('.video-item-highlight').forEach(el => {
+      el.classList.remove('video-item-highlight');
+    });
+
+    targetElement.classList.add('video-item-highlight');
+    setTimeout(() => {
+      if (targetElement) targetElement.classList.remove('video-item-highlight');
+    }, 2000);
+  } else {
+    console.log('[selectChannel] 未找到对应的视频卡片');
+  }
+
+  // 重置搜索框
+  elements.channelSearch.value = '';
+  elements.searchDropdown.style.display = 'none';
+  searchResults = [];
+  selectedIndex = -1;
+}
+
 // ==================== 密码模态框 ====================
 
 let pendingAction: ((password: string) => Promise<void>) | null = null;
@@ -746,6 +854,32 @@ function setupEventListeners(): void {
 
   elements.btnToggle.addEventListener('click', toggleRestriction);
   elements.btnRescan.addEventListener('click', renderVideoList);
+
+  // 搜索相关事件
+  elements.channelSearch.addEventListener('input', (e) => {
+    updateSearchDropdown((e.target as HTMLInputElement).value);
+  });
+
+  elements.channelSearch.addEventListener('keydown', handleSearchKeydown);
+
+  // 下拉列表点击事件（事件委托）
+  elements.searchDropdown.addEventListener('click', (e) => {
+    const target = e.target as HTMLElement;
+    const item = target.closest('.search-item') as HTMLElement;
+    if (item && item.dataset.name) {
+      selectChannel(item.dataset.name);
+    }
+  });
+
+  // 点击外部关闭下拉列表
+  window.addEventListener('click', (e) => {
+    if (e.target !== elements.channelSearch && !elements.searchDropdown.contains(e.target as Node)) {
+      elements.searchDropdown.style.display = 'none';
+      searchResults = [];
+      selectedIndex = -1;
+    }
+  });
+
   elements.btnClearYoutube.addEventListener('click', clearYoutubeChannels);
   elements.btnClearBilibili.addEventListener('click', clearBilibiliChannels);
   elements.btnClearAll.addEventListener('click', clearAllChannels);

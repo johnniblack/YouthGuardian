@@ -237,6 +237,63 @@ body {
   min-width: 48px;
 }
 
+/* 搜索容器 */
+.search-container {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.search-container .input {
+  margin-bottom: 0 !important;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+/* 下拉列表 */
+.search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius-small);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(255, 179, 71, 0.2);
+  z-index: 1000;
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 4px;
+}
+
+.search-item {
+  padding: 10px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+  border-bottom: 1px solid rgba(90, 74, 58, 0.05);
+}
+
+.search-item:last-child {
+  border-bottom: none;
+}
+
+.search-item:hover, .search-item.active {
+  background: var(--color-primary-light);
+  color: var(--color-text);
+}
+
+/* 视频项高亮动画 */
+@keyframes highlight-fade {
+  0% { box-shadow: 0 0 0 4px var(--color-primary); transform: scale(1.02); }
+  100% { box-shadow: var(--shadow-sm); transform: scale(1); }
+}
+
+.video-item-highlight {
+  animation: highlight-fade 1.5s ease-out;
+  border-color: var(--color-primary) !important;
+  z-index: 10;
+}
+
 .btn-danger {
   background: var(--bg-secondary);
   color: var(--color-danger);
