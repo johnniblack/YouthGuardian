@@ -53,7 +53,14 @@ export function filterVideo(video: VideoItem, allowedChannels: AllowedChannel[])
   });
 
   for (const element of videoElements) {
-    if (processedElements.has(element)) continue;
+    // 强制检查：即使 WeakSet 中有记录，如果 DOM 上没有属性标记，也重新处理一次
+    if (processedElements.has(element) && element.getAttribute('data-youth-guardian-processed') === 'true') continue;
+
+    // 如果是 WeakSet 中有但 DOM 没有标记的情况，从集合中移除，以便重新处理
+    if (processedElements.has(element)) {
+      processedElements.delete(element);
+    }
+
     processedElements.add(element);
 
     element.setAttribute('data-youth-guardian-processed', 'true');
@@ -300,8 +307,24 @@ async function filterNewNodes(): Promise<void> {
   // 扫描整个页面
   const videos = scanFn(document.body);
 
+  // YouTube 首页或播放页检测
+  const isYouTube = getCurrentPlatform() === 'youtube';
+  const isYouTubeHome = isYouTube && !!document.querySelector('ytd-rich-grid-renderer');
+  const isYouTubeWatch = isYouTube && !!document.querySelector('ytd-watch-flexy');
+
   for (const video of videos) {
     filterVideo(video, allowedChannels);
+  }
+
+  // 增加 YouTube 首页或播放页兜底重试机制
+  if (isYouTubeHome || isYouTubeWatch) {
+    setTimeout(() => {
+      console.log(`[YouthGuardian] 执行 YouTube ${isYouTubeHome ? '首页' : '播放页'}兜底扫描...`);
+      const retryVideos = scanFn(document.body);
+      for (const video of retryVideos) {
+        filterVideo(video, allowedChannels);
+      }
+    }, 1000);
   }
 
   // B站 特别处理
@@ -310,9 +333,34 @@ async function filterNewNodes(): Promise<void> {
     hideNonVideoContent();
   }
 
-  // YouTube 特别处理 - 直接隐藏直播卡片（双保险）
+  // YouTube 特别处理 - 直接隐藏直播卡片和自动合辑播放列表（双保险）
   if (getCurrentPlatform() === 'youtube') {
     hideYouTubeLiveStreams();
+    hideYouTubePlaylists();
+  }
+}
+
+/**
+ * 隐藏 YouTube 自动合辑列表
+ */
+function hideYouTubePlaylists(): void {
+  const playlistSelectors = [
+    'ytd-playlist-panel-renderer',    // 播放页右侧自动播放列表
+    'ytd-compact-autoplay-renderer'   // 部分旧版或不同类型的自动播放组件
+  ];
+
+  for (const selector of playlistSelectors) {
+    const playlists = Array.from(document.querySelectorAll(selector));
+    for (const playlist of playlists) {
+      if (playlist instanceof HTMLElement) {
+        playlist.style.setProperty('display', 'none', 'important');
+        playlist.setAttribute('data-youth-guardian-playlist', 'true');
+
+        if (!processedElements.has(playlist)) {
+          processedElements.add(playlist);
+        }
+      }
+    }
   }
 }
 

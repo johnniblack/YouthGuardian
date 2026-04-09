@@ -1,6 +1,6 @@
 {
   "name": "youth-guardian",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "青少年视频网站白名单限制插件",
   "main": "src/background/service-worker.ts",
   "scripts": {
