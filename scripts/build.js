@@ -21,13 +21,18 @@ const staticFiles = [
   { src: 'manifest.json', dest: 'manifest.json' },
   { src: 'src/popup/popup.html', dest: 'popup/popup.html' },
   { src: 'src/popup/popup.css', dest: 'popup/popup.css' },
+  { src: 'icons', dest: 'icons' }, // ¸´ÖÆÍ¼±êÄ¿Â¼
 ];
 
 for (const file of staticFiles) {
   const src = path.join(__dirname, '..', file.src);
   const dest = path.join(distDir, file.dest);
   if (fs.existsSync(src)) {
-    fs.copyFileSync(src, dest);
+    if (fs.statSync(src).isDirectory()) {
+      fs.cpSync(src, dest, { recursive: true });
+    } else {
+      fs.copyFileSync(src, dest);
+    }
     console.log(`Copied: ${file.src} -> ${file.dest}`);
   }
 }

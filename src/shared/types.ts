@@ -20,6 +20,7 @@ export interface VideoItem {
   duration?: string;
   videoUrl?: string;
   thumbnailUrl?: string;
+  isLive?: boolean; // 是否为直播视频
 }
 
 /**

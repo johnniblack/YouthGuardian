@@ -97,6 +97,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // 页面加载完成后执行初始过滤
 async function initializeFiltering() {
   try {
+    // 延迟 500ms 确保页面内容加载完成
+    await new Promise(resolve => setTimeout(resolve, 500));
     await filterCurrentPage();
     observePageChanges();
   } catch (error) {

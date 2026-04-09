@@ -34,6 +34,9 @@ function getScanFunction(): (container: HTMLElement) => VideoItem[] {
  * 过滤单个视频
  */
 export function filterVideo(video: VideoItem, allowedChannels: AllowedChannel[]): void {
+  // 查找对应的视频卡片元素
+  const videoElements = findVideoElements(video);
+
   // 检查是否在白名单中
   const isAllowed = allowedChannels.some(channel => {
     if (channel.platform !== video.platform) return false;
@@ -49,53 +52,67 @@ export function filterVideo(video: VideoItem, allowedChannels: AllowedChannel[])
     return false;
   });
 
-  // 找到对应的视频卡片元素并隐藏
-  const videoElements = findVideoElements(video);
-
   for (const element of videoElements) {
     if (processedElements.has(element)) continue;
     processedElements.add(element);
 
     element.setAttribute('data-youth-guardian-processed', 'true');
-    element.style.display = isAllowed ? '' : 'none';
+
+    // 直播视频特殊处理：只有在白名单中才放行，不在白名单就隐藏
+    if (video.isLive) {
+      element.style.display = isAllowed ? '' : 'none';
+    } else {
+      // 普通视频：不在白名单就隐藏
+      element.style.display = isAllowed ? '' : 'none';
+    }
   }
 }
 
 /**
  * 查找视频卡片元素
- * 这个函数需要根据平台选择器来查找
  */
 function findVideoElements(video: VideoItem): HTMLElement[] {
   const platform = getCurrentPlatform();
   const results: HTMLElement[] = [];
+  const videoIdRegex = /[?&]v=([^&]+)/;
 
   if (platform === 'youtube') {
-    // YouTube 视频卡片选择器
-    // 注意：ytd-rich-item-renderer 本身没有 data-video-id 属性，需要通过链接查找
-    // 找到包含视频链接的元素，然后向上查找 ytd-rich-item-renderer 父元素
-    const watchLink = document.querySelector(`a[href*="/watch?v=${video.id}"]`) as HTMLAnchorElement;
-    if (watchLink) {
-      // 向上查找 ytd-rich-item-renderer 父元素
-      let parent = watchLink.closest('ytd-rich-item-renderer');
-      if (parent instanceof HTMLElement) {
-        results.push(parent);
-      }
-      // 也可能是 ytd-video-renderer
-      if (!parent) {
-        parent = watchLink.closest('ytd-video-renderer');
+    // 方法1：直接通过链接 + closest 查找（适用于主页、搜索页）
+    // 遍历所有链接，用正则匹配视频 ID
+    const allLinks = Array.from(document.querySelectorAll('a[href*="/watch?v="]')) as HTMLAnchorElement[];
+    for (const link of allLinks) {
+      const href = link.getAttribute('href') || '';
+      const match = href.match(videoIdRegex);
+      if (match && match[1] === video.id) {
+        // 向上查找 ytd-rich-item-renderer 或 ytd-video-renderer
+        let parent = link.closest('ytd-rich-item-renderer');
         if (parent instanceof HTMLElement) {
           results.push(parent);
         }
+        if (!results.includes(parent as HTMLElement)) {
+          parent = link.closest('ytd-video-renderer');
+          if (parent instanceof HTMLElement) {
+            results.push(parent);
+          }
+        }
+        break;
       }
     }
-    // 通过频道名查找（备用）
-    if (results.length === 0 && video.authorName) {
-      const channelEls = Array.from(document.querySelectorAll(`[data-author-name="${video.authorName}"]`));
-      for (const el of channelEls) {
-        const parent = el.closest('ytd-rich-item-renderer') || el.closest('ytd-video-renderer');
-        if (parent instanceof HTMLElement) {
-          results.push(parent);
+
+    // 方法2：如果方法1找不到（播放页的 yt-lockup-view-model），用容器遍历方式
+    if (results.length === 0) {
+      const containers = Array.from(document.querySelectorAll('yt-lockup-view-model')) as HTMLElement[];
+      for (const container of containers) {
+        const links = container.querySelectorAll('a[href*="/watch?v="]');
+        for (const link of Array.from(links)) {
+          const href = link.getAttribute('href') || '';
+          const match = href.match(videoIdRegex);
+          if (match && match[1] === video.id) {
+            results.push(container);
+            break;
+          }
         }
+        if (results.length > 0) break;
       }
     }
   } else if (platform === 'bilibili') {
@@ -241,6 +258,33 @@ function hideNonVideoContent(): void {
 }
 
 /**
+ * 隐藏 YouTube 直播卡片（双保险）
+ * 直接通过 DOM 特征检测正在直播的视频
+ * 注意：这里只处理"正在直播"的情况，直播回放由 parseVideoRenderer 标记后通过 filterVideo 处理
+ */
+function hideYouTubeLiveStreams(): void {
+  // 直播卡片特征：包含 .yt-spec-avatar-shape__live-badge 或 .yt-live-badge
+  // 注意：这里只隐藏正在直播的卡片，直播回放（已结束的直播）由 filterVideo 的白名单逻辑处理
+  const liveSelectors = [
+    '.yt-spec-avatar-shape__live-badge', // 直播徽章（正在直播）
+    'yt-live-badge',                     // 直播标签
+  ];
+
+  for (const selector of liveSelectors) {
+    const liveElements = Array.from(document.querySelectorAll(selector));
+    for (const el of liveElements) {
+      // 向上查找 ytd-rich-item-renderer 或 ytd-video-renderer 父元素
+      const card = el.closest('ytd-rich-item-renderer, ytd-video-renderer');
+      if (card instanceof HTMLElement && !processedElements.has(card)) {
+        processedElements.add(card);
+        card.setAttribute('data-youth-guardian-live', 'true');
+        card.style.display = 'none';
+      }
+    }
+  }
+}
+
+/**
  * 过滤新增的节点
  */
 async function filterNewNodes(): Promise<void> {
@@ -264,6 +308,11 @@ async function filterNewNodes(): Promise<void> {
   if (getCurrentPlatform() === 'bilibili') {
     hideLiveStreams();
     hideNonVideoContent();
+  }
+
+  // YouTube 特别处理 - 直接隐藏直播卡片（双保险）
+  if (getCurrentPlatform() === 'youtube') {
+    hideYouTubeLiveStreams();
   }
 }
 

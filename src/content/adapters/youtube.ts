@@ -43,6 +43,7 @@ function parseVideoRenderer(card: Element): VideoItem | null {
       'a#video-title',
       'yt-formatted-string#title',
       '.yt-lockup-view-model__title',
+      '.ytLockupMetadataViewModelTitle',  // yt-lockup-view-model 的标题
       '[aria-label*="video"]'
     ];
 
@@ -112,6 +113,18 @@ function parseVideoRenderer(card: Element): VideoItem | null {
             }
           }
         }
+        // 备用：从 ytContentMetadataViewModelMetadataText 获取（yt-lockup-view-model 的频道名）
+        if (!authorName) {
+          const metaTexts = card.querySelectorAll('.ytContentMetadataViewModelMetadataText');
+          for (const meta of Array.from(metaTexts)) {
+            const text = meta.textContent?.trim() || '';
+            // 跳过包含"次观看"的文本（这是观看数）
+            if (text && !text.includes('次观看') && !text.includes('观看')) {
+              authorName = text;
+              break;
+            }
+          }
+        }
       }
     }
 
@@ -150,6 +163,16 @@ function parseVideoRenderer(card: Element): VideoItem | null {
     // 获取缩略图 URL
     const thumbnailUrl = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
 
+    // 检测是否是直播视频
+    // 直播视频特征：yt-spec-avatar-shape__live-badge、yt-live-badge、aria-label包含"直播"、"LIVE"等
+    // 使用 textContent 而不是 querySelector，因为 YouTube 使用 Shadow DOM，querySelector 可能无法穿透
+    const cardText = card.textContent || '';
+    const isLive = card.querySelector('.yt-spec-avatar-shape__live-badge') !== null ||
+      card.querySelector('yt-live-badge') !== null ||
+      cardText.includes('直播中') ||
+      cardText.includes('LIVE') ||
+      cardText.includes('正在直播');
+
     return {
       id: videoId,
       platform: 'youtube',
@@ -159,7 +182,8 @@ function parseVideoRenderer(card: Element): VideoItem | null {
       authorUrl,
       duration,
       videoUrl,
-      thumbnailUrl
+      thumbnailUrl,
+      isLive
     };
   } catch {
     return null;
@@ -174,10 +198,12 @@ export function scanVisibleVideos(container: HTMLElement): VideoItem[] {
   const seen = new Set<string>();
 
   // 选择器适配不同页面
+  // 注意：ytd-item-section-renderer 是容器，需要用 yt-lockup-view-model 来获取具体视频卡片
   const selectors = [
     'ytd-video-renderer',
     'ytd-rich-item-renderer',
     'ytd-shelf-renderer',
+    'yt-lockup-view-model',  // 视频播放页右侧推荐列表、搜索结果等
     '.ytp-video-list-item-renderer'
   ];
 
