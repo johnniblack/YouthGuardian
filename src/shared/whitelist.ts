@@ -70,6 +70,8 @@ export async function addChannel(
   };
 
   channels.push(newChannel);
+
+  // 只保存到 local
   await setAllowedChannels(channels);
 
   return newChannel;
@@ -81,6 +83,8 @@ export async function addChannel(
 export async function removeChannel(id: string): Promise<void> {
   const channels = await getAllowedChannels();
   const filtered = channels.filter(c => c.id !== id);
+
+  // 只更新 local
   await setAllowedChannels(filtered);
 }
 
@@ -88,6 +92,7 @@ export async function removeChannel(id: string): Promise<void> {
  * 清空全部白名单
  */
 export async function clearAllChannels(): Promise<void> {
+  // 只清空 local
   await setAllowedChannels([]);
 }
 

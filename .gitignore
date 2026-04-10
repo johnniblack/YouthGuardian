@@ -22,3 +22,7 @@ Thumbs.db
 # 备份文件
 *.bak
 release/
+
+# Superpowers 工具
+.superpowers/
+.claude/

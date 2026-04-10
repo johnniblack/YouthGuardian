@@ -275,7 +275,11 @@ const elements = {
   confirmPasswordInput: document.getElementById('confirm-password-input') as HTMLInputElement,
   modalCancel: document.getElementById('modal-cancel') as HTMLButtonElement,
   modalConfirm: document.getElementById('modal-confirm') as HTMLButtonElement,
-  modalError: document.getElementById('modal-error') as HTMLParagraphElement
+  modalError: document.getElementById('modal-error') as HTMLParagraphElement,
+  // 导出导入
+  btnExportSync: document.getElementById('btn-export-sync') as HTMLButtonElement,
+  btnImportSync: document.getElementById('btn-import-sync') as HTMLButtonElement,
+  importFileInput: document.getElementById('import-file-input') as HTMLInputElement
 };
 
 // ==================== 初始化 ====================
@@ -308,6 +312,7 @@ async function ensureContentScriptLoaded(tabId: number, tabUrl: string): Promise
 
 async function init(): Promise<void> {
   console.log('YouthGuardian popup init');
+
   await loadStatus();
   await loadChannels();
   setupEventListeners();
@@ -921,6 +926,114 @@ function setupEventListeners(): void {
   });
   elements.passwordModal.addEventListener('click', (e) => {
     if (e.target === elements.passwordModal) hidePasswordModal();
+  });
+
+  // 导出数据
+  elements.btnExportSync.addEventListener('click', async () => {
+    try {
+      const channels = await getAllowedChannels();
+
+      if (channels.length === 0) {
+        console.log('[Export] 没有可导出的频道数据');
+        return;
+      }
+
+      const backupData = {
+        version: 1,
+        exportedAt: Date.now(),
+        channels: channels
+      };
+      const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `youth-guardian-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      console.log('[Export] 导出成功，共', channels.length, '个频道');
+    } catch (error) {
+      console.error('[Export] 导出失败:', error);
+      console.log('导出失败: ' + (error instanceof Error ? error.message : String(error)));
+    }
+  });
+
+  // 导入同步数据
+  elements.btnImportSync.addEventListener('click', () => {
+    elements.importFileInput.click();
+  });
+
+  elements.importFileInput.addEventListener('change', async (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+
+    console.log('[Import] 开始导入文件:', file.name);
+
+    try {
+      const text = await file.text();
+      let backupData: { version?: number; exportedAt?: number; channels?: unknown[] };
+
+      try {
+        backupData = JSON.parse(text);
+      } catch (parseError) {
+        throw new Error('文件不是有效的 JSON 格式');
+      }
+
+      // 校验 version 字段
+      if (typeof backupData.version !== 'number') {
+        throw new Error('无效的备份文件：缺少 version 字段');
+      }
+
+      // 校验 channels 字段
+      if (!Array.isArray(backupData.channels)) {
+        throw new Error('无效的备份文件：channels 必须是数组');
+      }
+
+      // 校验每个 channel 对象的必要字段
+      const channels: AllowedChannel[] = [];
+      for (let i = 0; i < backupData.channels.length; i++) {
+        const channel = backupData.channels[i] as Record<string, unknown>;
+        if (!channel || typeof channel !== 'object') {
+          throw new Error(`第 ${i + 1} 个频道数据无效`);
+        }
+        if (!channel.id || typeof channel.id !== 'string') {
+          throw new Error(`第 ${i + 1} 个频道缺少有效的 id`);
+        }
+        if (!channel.platform || !['youtube', 'bilibili'].includes(channel.platform as string)) {
+          throw new Error(`第 ${i + 1} 个频道缺少有效的 platform`);
+        }
+        if (!channel.authorName || typeof channel.authorName !== 'string') {
+          throw new Error(`第 ${i + 1} 个频道缺少有效的 authorName`);
+        }
+        channels.push(channel as unknown as AllowedChannel);
+      }
+
+      console.log('[Import] 校验通过，共', channels.length, '个频道');
+
+      // 保存到 storage
+      await setAllowedChannels(channels);
+      currentChannels = channels;
+
+      // 更新 UI
+      const tab = await getCurrentTab();
+      const url = tab?.url || '';
+      let platform: 'youtube' | 'bilibili' | 'unsupported' = 'unsupported';
+      if (url.includes('youtube.com')) platform = 'youtube';
+      else if (url.includes('bilibili.com')) platform = 'bilibili';
+      const platformChannels = channels.filter((c: AllowedChannel) => c.platform === platform);
+      elements.channelCount.textContent = platformChannels.length.toString();
+
+      await renderChannelList();
+
+      console.log('[Import] 导入成功，共', channels.length, '个频道');
+      // 显示成功消息（使用 console.log 代替 alert）
+      console.log(`导入成功！已恢复 ${channels.length} 个频道`);
+    } catch (error) {
+      console.error('[Import] 导入失败:', error);
+      console.log('导入失败: ' + (error instanceof Error ? error.message : String(error)));
+    }
+
+    // 清空文件输入，以便下次选择同一文件
+    (e.target as HTMLInputElement).value = '';
   });
 }
 

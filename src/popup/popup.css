@@ -666,3 +666,43 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 179, 71, 0.5);
 }
+
+/* 数据备份区块 */
+.backup-section {
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid rgba(255, 179, 71, 0.15);
+}
+
+.backup-section h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.backup-section h3::before {
+  content: '📦';
+  font-size: 14px;
+}
+
+.backup-section .hint {
+  font-size: 12px;
+  color: var(--color-text-light);
+  margin-bottom: 12px;
+}
+
+.backup-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.backup-actions .btn {
+  flex: 1;
+}
