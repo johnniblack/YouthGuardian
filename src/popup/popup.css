@@ -1,6 +1,65 @@
 /* YouthGuardian Popup 样式 v2 */
 /* 友好亲和风格：暖橙配色 + 圆润设计 */
 
+/* 锁屏界面 */
+.lock-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, #FFF0E0 100%);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 200;
+}
+
+.lock-screen.hidden {
+  display: none;
+}
+
+.lock-content {
+  text-align: center;
+  padding: 40px 32px;
+  background: var(--bg-secondary);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-lg);
+  width: 90%;
+  max-width: 280px;
+  border: 1px solid rgba(255, 179, 71, 0.2);
+}
+
+.lock-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.lock-content h2 {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: 8px;
+}
+
+.lock-hint {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  margin-bottom: 20px;
+}
+
+.lock-content .input {
+  margin-bottom: 12px;
+}
+
+.lock-content .btn {
+  margin-top: 8px;
+}
+
+.lock-content .error-message {
+  margin-top: 16px;
+}
+
 :root {
   --bg-primary: #FFF8F0;
   --bg-secondary: #FFFFFF;

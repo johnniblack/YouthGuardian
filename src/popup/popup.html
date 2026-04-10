@@ -8,6 +8,18 @@
 </head>
 <body>
   <div id="app">
+    <!-- 锁屏界面 -->
+    <div class="lock-screen hidden" id="lock-screen">
+      <div class="lock-content">
+        <div class="lock-icon">🔒</div>
+        <h2>YouthGuardian</h2>
+        <p class="lock-hint" id="lock-hint">请输入密码以继续</p>
+        <input type="password" class="input" id="lock-password-input" placeholder="请输入密码" autocomplete="off">
+        <button class="btn btn-primary" id="lock-unlock-btn">解锁</button>
+        <p class="error-message" id="lock-error" style="display: none;"></p>
+      </div>
+    </div>
+
     <!-- 标签页导航 -->
     <nav class="tabs">
       <button class="tab active" data-tab="videos">视频</button>

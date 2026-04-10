@@ -279,8 +279,66 @@ const elements = {
   // 导出导入
   btnExportSync: document.getElementById('btn-export-sync') as HTMLButtonElement,
   btnImportSync: document.getElementById('btn-import-sync') as HTMLButtonElement,
-  importFileInput: document.getElementById('import-file-input') as HTMLInputElement
+  importFileInput: document.getElementById('import-file-input') as HTMLInputElement,
+  // 锁屏相关
+  lockScreen: document.getElementById('lock-screen') as HTMLDivElement,
+  lockHint: document.getElementById('lock-hint') as HTMLParagraphElement,
+  lockPasswordInput: document.getElementById('lock-password-input') as HTMLInputElement,
+  lockUnlockBtn: document.getElementById('lock-unlock-btn') as HTMLButtonElement,
+  lockError: document.getElementById('lock-error') as HTMLParagraphElement
 };
+
+// ==================== 锁屏逻辑 ====================
+
+let isUnlocked = false;
+
+async function checkPasswordRequired(): Promise<boolean> {
+  const settings = await getSettings();
+  // 只有在密码保护功能开启时才需要验证
+  return settings.passwordEnabled;
+}
+
+function showLockScreen(): void {
+  elements.lockScreen.classList.remove('hidden');
+  elements.lockPasswordInput.value = '';
+  elements.lockError.style.display = 'none';
+  elements.lockPasswordInput.focus();
+}
+
+function hideLockScreen(): void {
+  elements.lockScreen.classList.add('hidden');
+}
+
+async function handleUnlock(): Promise<void> {
+  const password = elements.lockPasswordInput.value;
+  if (!password) {
+    elements.lockError.textContent = '请输入密码';
+    elements.lockError.style.display = 'block';
+    return;
+  }
+
+  const valid = await verifyPassword(password);
+  if (!valid) {
+    elements.lockError.textContent = '密码错误';
+    elements.lockError.style.display = 'block';
+    elements.lockPasswordInput.value = '';
+    elements.lockPasswordInput.focus();
+    return;
+  }
+
+  hideLockScreen();
+  isUnlocked = true;
+  await initMainContent();
+}
+
+function setupLockScreenListeners(): void {
+  elements.lockUnlockBtn.addEventListener('click', handleUnlock);
+  elements.lockPasswordInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      handleUnlock();
+    }
+  });
+}
 
 // ==================== 初始化 ====================
 
@@ -313,6 +371,21 @@ async function ensureContentScriptLoaded(tabId: number, tabUrl: string): Promise
 async function init(): Promise<void> {
   console.log('YouthGuardian popup init');
 
+  // 检查是否需要密码
+  const passwordRequired = await checkPasswordRequired();
+
+  if (passwordRequired) {
+    // 需要密码：显示锁屏，等待解锁
+    setupLockScreenListeners();
+    showLockScreen();
+  } else {
+    // 不需要密码：直接初始化主内容
+    isUnlocked = true;
+    await initMainContent();
+  }
+}
+
+async function initMainContent(): Promise<void> {
   await loadStatus();
   await loadChannels();
   setupEventListeners();

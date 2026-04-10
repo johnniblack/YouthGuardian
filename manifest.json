@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YouthGuardian 青少年守护",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "description": "在 YouTube/Bilibili 建立频道白名单，仅展示允许频道的视频内容",
   "permissions": [
     "storage",
